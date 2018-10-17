@@ -152,7 +152,7 @@ class SacKernel(Kernel):
     #    return self.create_jupyter_subprocess(args)
     
     def compile_with_sac2c(self, source_filename, binary_filename, sac2cflags=[]):
-        sac2cflags = ['-v0', '-O0', '-noprelude'] + sac2cflags
+        sac2cflags = ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud'] + sac2cflags
         args = [self.sac2c_bin] + ['-o', binary_filename] + sac2cflags + [source_filename]
         return self.create_jupyter_subprocess(args)
 
