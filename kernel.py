@@ -17,13 +17,21 @@ print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
 
+def rm_nonempty_dir (d):
+    for root, dirs, files in os.walk (d, topdown=False):
+        for name in files:
+            os.remove (os.path.join(root, name))
+        for name in dirs:
+            os.rmdir (os.path.join(root, name))
+    os.rmdir (d)
+
 
 class RealTimeSubprocess(subprocess.Popen):
     """
     A subprocess that allows to read its stdout and stderr in real time
     """
 
-    def __init__(self, cmd, write_to_stdout, write_to_stderr):
+    def __init__(self, cmd, write_to_stdout, write_to_stderr, directory):
         """
         :param cmd: the command to execute
         :param write_to_stdout: a callable that will be called with chunks of data from stdout
@@ -33,7 +41,7 @@ class RealTimeSubprocess(subprocess.Popen):
         self._write_to_stderr = write_to_stderr
 
         # FIXME make a better working directory!
-        super().__init__(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, cwd="/tmp")
+        super().__init__(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, cwd=directory)
 
         self._stdout_queue = Queue()
         self._stdout_thread = Thread(target=RealTimeSubprocess._enqueue_output, args=(self.stdout, self._stdout_queue))
@@ -102,26 +110,18 @@ class SacKernel(Kernel):
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
         self.sac2c_so_handle.jupyter_init ()
 
-
-
-        # mastertemp = tempfile.mkstemp(suffix='.out')
-        # os.close(mastertemp[0])
-        # self.master_path = mastertemp[1]
-        # filepath = path.join(path.dirname(path.realpath(__file__)), 'resources', 'master.c')
-        # subprocess.call(['gcc', filepath, '-std=c11', '-rdynamic', '-ldl', '-o', self.master_path])
+        # Creatae the directory where all the compilation/execution will be happening.
+        self.tmpdir = tempfile.mkdtemp (prefix="jup-sac")
 
     def cleanup_files(self):
         """Remove all the temporary files created by the kernel"""
         for file in self.files:
             os.remove(file)
-        #os.remove(self.master_path)
+
+        # Remove the directory
+        rm_nonempty_dir (self.tmpdir)
 
     def check_sacprog_type (self, prog):
-        # XXX parse locally while sac2c function aborts on non-existing modules.
-        #if re.match ("^use \w+:", prog) or re.match ("^import \w+", prog):
-        #    return 4
-
-        #prog = "".join (self.imports) + prog
         s = ctypes.c_char_p (prog.encode ('utf-8'))
         return self.sac2c_so_handle.parse_from_string (s, -1) #len (self.imports))
             
@@ -131,6 +131,7 @@ class SacKernel(Kernel):
         # We don't want the file to be deleted when closed, but only when the kernel stops
         kwargs['delete'] = False
         kwargs['mode'] = 'w'
+        kwargs['dir'] = self.tmpdir
         file = tempfile.NamedTemporaryFile(**kwargs)
         self.files.append(file.name)
         return file
@@ -144,7 +145,8 @@ class SacKernel(Kernel):
     def create_jupyter_subprocess(self, cmd):
         return RealTimeSubprocess(cmd,
                                   lambda contents: self._write_to_stdout(contents.decode()),
-                                  lambda contents: self._write_to_stderr(contents.decode()))
+                                  lambda contents: self._write_to_stderr(contents.decode()),
+                                  self.tmpdir)
 
     #def compile_with_gcc(self, source_filename, binary_filename, cflags=None, ldflags=None):
     #    cflags = ['-std=c11', '-fPIC', '-shared', '-rdynamic'] + cflags
