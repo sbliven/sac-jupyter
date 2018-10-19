@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import os
 import os.path as path
+import json
 
 import ctypes
 
@@ -109,6 +110,13 @@ class SacKernel(Kernel):
         self.sac2c_so = p + '/build_r/lib/libsac2c_p.so'
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
         self.sac2c_so_handle.jupyter_init ()
+        
+        #self.sac2c_so_handle.parse_from_string.argtypes = []
+        self.sac2c_so_handle.parse_from_string.restype = ctypes.c_void_p
+
+        self.sac2c_so_handle.jupyter_free.argtypes = ctypes.c_void_p,
+        self.sac2c_so_handle.jupyter_free.res_rtype = ctypes.c_void_p
+
 
         # Creatae the directory where all the compilation/execution will be happening.
         self.tmpdir = tempfile.mkdtemp (prefix="jup-sac")
@@ -121,9 +129,21 @@ class SacKernel(Kernel):
         # Remove the directory
         rm_nonempty_dir (self.tmpdir)
 
+        # FIXME call jupyter_finalize 
+
     def check_sacprog_type (self, prog):
         s = ctypes.c_char_p (prog.encode ('utf-8'))
-        return self.sac2c_so_handle.parse_from_string (s, -1) #len (self.imports))
+        ret_ptr = self.sac2c_so_handle.parse_from_string (s, -1) #len (self.imports))
+        ret_s = ctypes.cast (ret_ptr, ctypes.c_char_p).value
+        self.sac2c_so_handle.jupyter_free (ret_ptr)
+        #print ("received json {}".format (ret_s))
+        j = {"status": "fail", "stderr": "cannot parse json: {}".format (ret_s)}
+        try:
+            j = json.loads (ret_s)
+        except:
+            pass
+        return j
+
             
 
     def new_temp_file(self, **kwargs):
@@ -223,15 +243,16 @@ int main () {{
         #magics = self._filter_magics(code)
 
         r = self.check_sacprog_type (code)
-        if r == -1:
+        if r["status"] != "ok": # == -1:
             self._write_to_stderr(
-                    "[SaC kernel] This is not an expression/statements/function or use/import/typedef")
+                    "[SaC kernel] This is not an expression/statements/function or use/import/typedef\n"
+                    + r["stderr"])
             return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
                     'user_expressions': {}}
 
 
         with self.new_temp_file(suffix='.sac') as source_file:
-            source_file.write(self.mk_sacprg (code, r))
+            source_file.write(self.mk_sacprg (code, r["ret"]))
             source_file.flush()
             with self.new_temp_file(suffix='.exe') as binary_file:
                 p = self.compile_with_sac2c(source_file.name, binary_file.name) 
@@ -254,11 +275,11 @@ int main () {{
         if p.returncode != 0:
             self._write_to_stderr("[SaC kernel] Executable exited with code {}".format(p.returncode))
         else:
-            if r == 2: # stmts
+            if r["ret"] == 2: # stmts
                 self.stmts.append (code)
-            elif r == 3: # funs
+            elif r["ret"] == 3: # funs
                 self.funs.append (code)
-            elif r == 4: # use/import/typedef
+            elif r["ret"] == 4: # use/import/typedef
                 self.imports.append (code)
 
         return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [], 'user_expressions': {}}
