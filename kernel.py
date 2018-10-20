@@ -8,15 +8,9 @@ import tempfile
 import os
 import os.path as path
 import json
+import shlex
 
 import ctypes
-
-print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-print ("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-
 
 def rm_nonempty_dir (d):
     for root, dirs, files in os.walk (d, topdown=False):
@@ -41,7 +35,6 @@ class RealTimeSubprocess(subprocess.Popen):
         self._write_to_stdout = write_to_stdout
         self._write_to_stderr = write_to_stderr
 
-        # FIXME make a better working directory!
         super().__init__(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, cwd=directory)
 
         self._stdout_queue = Queue()
@@ -104,6 +97,7 @@ class SacKernel(Kernel):
             #"use Array: all;"
         ]
         self.funs = []
+        self.sac2c_flags =  ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud']
 
         p = '/home/tema/src/sac2c-jupyter-modified'
         self.sac2c_bin = p + '/build_r/sac2c_p'
@@ -128,8 +122,9 @@ class SacKernel(Kernel):
 
         # Remove the directory
         rm_nonempty_dir (self.tmpdir)
-
-        # FIXME call jupyter_finalize 
+    
+        # Call some cleanup functions in sac2c library.
+        self.sac2c_so_handle.jupyter_finalize ()
 
     def check_sacprog_type (self, prog):
         s = ctypes.c_char_p (prog.encode ('utf-8'))
@@ -173,8 +168,9 @@ class SacKernel(Kernel):
     #    args = ['gcc', source_filename] + cflags + ['-o', binary_filename] + ldflags
     #    return self.create_jupyter_subprocess(args)
     
-    def compile_with_sac2c(self, source_filename, binary_filename, sac2cflags=[]):
-        sac2cflags = ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud'] + sac2cflags
+    def compile_with_sac2c(self, source_filename, binary_filename, extra_flags=[]):
+        # Flags are of type list of strings.
+        sac2cflags = self.sac2c_flags + extra_flags 
         args = [self.sac2c_bin] + ['-o', binary_filename] + sac2cflags + [source_filename]
         return self.create_jupyter_subprocess(args)
 
@@ -199,12 +195,35 @@ class SacKernel(Kernel):
     #                     magics['args'] += [argument.strip('"')]
 
     #     return magics
+    def check_magics (self, code):
+        l = code.splitlines ()[0].strip ()
+        if l == '%print':
+            return self.mk_sacprg ("/* Placeholder.  */ 0", 1)
+        elif l == '%flags':
+            return ' '.join (self.sac2c_flags)
+        elif l.startswith ('%setflags'):
+            nl = shlex.split (l[len ('%setflags'):])
+            self.sac2c_flags = nl
+            return "setting flags to: {}".format (nl)
+        elif l == '%help':
+            return """\
+Currently the following commands are available:
+    %print      -- print the current program including
+                   imports, functions and statements in the main.
+    %flags      -- print flags that are used when running sac2c.
+    %setflags <flags>
+                -- reset sac2c falgs to <flags>
+"""
+        else:
+            return None
+
+
 
     def mk_sacprg (self, txt, r):
 
-        stmts = " ".join (self.stmts)
-        funs = " ".join (self.funs)
-        imports = " ".join (self.imports)
+        stmts = "\n\t".join (self.stmts)
+        funs = "\n\n".join (self.funs)
+        imports = "\n".join (self.imports)
 
         if r == 1: # expr
             stmts += "StdIO::print ({});".format (txt)
@@ -241,6 +260,13 @@ int main () {{
         
         #print ("user_expressions = ", user_expressions)
         #magics = self._filter_magics(code)
+
+        m = self.check_magics (code)
+        if m is not None:
+            self._write_to_stdout (m)
+            return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
+                    'user_expressions': {}}
+
 
         r = self.check_sacprog_type (code)
         if r["status"] != "ok": # == -1:
