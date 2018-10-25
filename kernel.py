@@ -230,7 +230,7 @@ Currently the following commands are available:
         imports = "\n".join (self.imports)
 
         if r == 1: # expr
-            stmts += "StdIO::print ({});".format (txt)
+            stmts += "StdIO::print ({}\n\n);".format (txt)
 
         elif r == 2: # stmt
             stmts += txt
