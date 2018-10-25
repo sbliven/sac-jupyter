@@ -196,7 +196,11 @@ class SacKernel(Kernel):
 
     #     return magics
     def check_magics (self, code):
-        l = code.splitlines ()[0].strip ()
+        print (code.splitlines ())
+        lines = code.splitlines ()
+        if len (lines) < 1:
+            return 0
+        l = lines[0].strip ()
         if l == '%print':
             return self.mk_sacprg ("/* Placeholder.  */ 0", 1)
         elif l == '%flags':
