@@ -99,7 +99,10 @@ class SacKernel(Kernel):
         self.funs = []
         self.sac2c_flags =  ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud']
 
-        p = '/home/tema/src/sac2c-jupyter-modified'
+        # XXX this is the location of the sac2c which must
+        #     be correct for the system you are running the kernel.
+        #     otherwise this module won't be able to find libsac2c.
+        p = '/tmp/sac2c'
         self.sac2c_bin = p + '/build_r/sac2c_p'
         self.sac2c_so = p + '/build_r/lib/libsac2c_p.so'
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
@@ -109,7 +112,6 @@ class SacKernel(Kernel):
 
         self.sac2c_so_handle.jupyter_free.argtypes = ctypes.c_void_p,
         self.sac2c_so_handle.jupyter_free.res_rtype = ctypes.c_void_p
-
 
         # Creatae the directory where all the compilation/execution will be happening.
         self.tmpdir = tempfile.mkdtemp (prefix="jup-sac")
@@ -121,7 +123,7 @@ class SacKernel(Kernel):
 
         # Remove the directory
         rm_nonempty_dir (self.tmpdir)
-    
+
         # Call some cleanup functions in sac2c library.
         self.sac2c_so_handle.jupyter_finalize ()
 
@@ -130,15 +132,12 @@ class SacKernel(Kernel):
         ret_ptr = self.sac2c_so_handle.jupyter_parse_from_string (s, -1) #len (self.imports))
         ret_s = ctypes.cast (ret_ptr, ctypes.c_char_p).value
         self.sac2c_so_handle.jupyter_free (ret_ptr)
-        #print ("received json {}".format (ret_s))
         j = {"status": "fail", "stderr": "cannot parse json: {}".format (ret_s)}
         try:
             j = json.loads (ret_s)
         except:
             pass
         return j
-
-            
 
     def new_temp_file(self, **kwargs):
         """Create a new temp file to be deleted when the kernel shuts down"""
@@ -162,40 +161,15 @@ class SacKernel(Kernel):
                                   lambda contents: self._write_to_stderr(contents.decode()),
                                   self.tmpdir)
 
-    #def compile_with_gcc(self, source_filename, binary_filename, cflags=None, ldflags=None):
-    #    cflags = ['-std=c11', '-fPIC', '-shared', '-rdynamic'] + cflags
-    #    args = ['gcc', source_filename] + cflags + ['-o', binary_filename] + ldflags
-    #    return self.create_jupyter_subprocess(args)
-    
     def compile_with_sac2c(self, source_filename, binary_filename, extra_flags=[]):
         # Flags are of type list of strings.
-        sac2cflags = self.sac2c_flags + extra_flags 
+        sac2cflags = self.sac2c_flags + extra_flags
         args = [self.sac2c_bin] + ['-o', binary_filename] + sac2cflags + [source_filename]
         return self.create_jupyter_subprocess(args)
 
-
-    # def _filter_magics(self, code):
-
-    #     magics = {'cflags': [],
-    #               'ldflags': [],
-    #               'args': []}
-
-    #     for line in code.splitlines():
-    #         if line.startswith('//%'):
-    #             key, value = line[3:].split(":", 2)
-    #             key = key.strip().lower()
-
-    #             if key in ['ldflags', 'cflags']:
-    #                 for flag in value.split():
-    #                     magics[key] += [flag]
-    #             elif key == "args":
-    #                 # Split arguments respecting quotes
-    #                 for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
-    #                     magics['args'] += [argument.strip('"')]
-
     #     return magics
     def check_magics (self, code):
-        print (code.splitlines ())
+        # print (code.splitlines ())
         lines = code.splitlines ()
         if len (lines) < 1:
             return 0
@@ -219,8 +193,6 @@ Currently the following commands are available:
 """
         else:
             return None
-
-
 
     def mk_sacprg (self, txt, r):
 
@@ -255,14 +227,10 @@ int main () {{
 }}
 """
         p = prg.format (imports, funs, stmts)
-        #print ("---\n", p)
         return p
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
-        
-        #print ("user_expressions = ", user_expressions)
-        #magics = self._filter_magics(code)
 
         m = self.check_magics (code)
         if m is not None:
