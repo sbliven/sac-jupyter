@@ -104,9 +104,8 @@ class SacKernel(Kernel):
         self.sac2c_so = p + '/build_r/lib/libsac2c_p.so'
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
         self.sac2c_so_handle.jupyter_init ()
-        
-        #self.sac2c_so_handle.parse_from_string.argtypes = []
-        self.sac2c_so_handle.parse_from_string.restype = ctypes.c_void_p
+
+        self.sac2c_so_handle.jupyter_parse_from_string.restype = ctypes.c_void_p
 
         self.sac2c_so_handle.jupyter_free.argtypes = ctypes.c_void_p,
         self.sac2c_so_handle.jupyter_free.res_rtype = ctypes.c_void_p
@@ -128,7 +127,7 @@ class SacKernel(Kernel):
 
     def check_sacprog_type (self, prog):
         s = ctypes.c_char_p (prog.encode ('utf-8'))
-        ret_ptr = self.sac2c_so_handle.parse_from_string (s, -1) #len (self.imports))
+        ret_ptr = self.sac2c_so_handle.jupyter_parse_from_string (s, -1) #len (self.imports))
         ret_s = ctypes.cast (ret_ptr, ctypes.c_char_p).value
         self.sac2c_so_handle.jupyter_free (ret_ptr)
         #print ("received json {}".format (ret_s))
@@ -285,7 +284,7 @@ int main () {{
             source_file.write(self.mk_sacprg (code, r["ret"]))
             source_file.flush()
             with self.new_temp_file(suffix='.exe') as binary_file:
-                p = self.compile_with_sac2c(source_file.name, binary_file.name) 
+                p = self.compile_with_sac2c(source_file.name, binary_file.name)
                 #, magics['cflags'], magics['ldflags'])
                 while p.poll() is None:
                     p.write_contents()
