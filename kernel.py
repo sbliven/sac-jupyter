@@ -80,9 +80,9 @@ class RealTimeSubprocess(subprocess.Popen):
 
 class SacKernel(Kernel):
     implementation = 'jupyter_sac_kernel'
-    implementation_version = '0.1'
+    implementation_version = '0.2'
     language = 'sac'
-    language_version = 'SaC-1.2'
+    language_version = '1.3.3'
     language_info = {'name': 'sac',
                      'mimetype': 'text/plain',
                      'file_extension': '.sac'}
@@ -244,7 +244,7 @@ int main () {{
             self._write_to_stderr(
                     "[SaC kernel] This is not an expression/statements/function or use/import/typedef\n"
                     + r["stderr"])
-            return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
+            return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
                     'user_expressions': {}}
 
 
@@ -261,7 +261,7 @@ int main () {{
                     self._write_to_stderr(
                             "[SaC kernel] sac2c exited with code {}, the executable will not be executed".format(
                                     p.returncode))
-                    return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
+                    return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
                             'user_expressions': {}}
 
         p = self.create_jupyter_subprocess([binary_file.name]) # + magics['args'])
@@ -271,6 +271,8 @@ int main () {{
 
         if p.returncode != 0:
             self._write_to_stderr("[SaC kernel] Executable exited with code {}".format(p.returncode))
+            return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
+                            'user_expressions': {}}
         else:
             if r["ret"] == 2: # stmts
                 self.stmts.append (code)
