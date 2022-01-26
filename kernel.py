@@ -106,9 +106,9 @@ class SacKernel(Kernel):
         # XXX this is the location of the sac2c which must
         #     be correct for the system you are running the kernel.
         #     otherwise this module won't be able to find libsac2c.
-        p = '/tmp/sac2c'
-        self.sac2c_bin = p + '/build_r/sac2c_p'
-        self.sac2c_so = p + '/build_r/lib/libsac2c_p.so'
+        p = '/Volumes/Users/sbs/sac2c'
+        self.sac2c_bin = p + '/build_p/sac2c_p'
+        self.sac2c_so = p + '/build_p/lib/libsac2c_p.dylib'
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
         self.sac2c_so_handle.jupyter_init ()
 
