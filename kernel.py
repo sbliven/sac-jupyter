@@ -100,7 +100,7 @@ class SacKernel(Kernel):
             #"use StdIO: all;",
             #"use Array: all;"
         ]
-        self.funs = []
+        self.funs = dict()
         self.sac2c_flags =  ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud']
 
         # XXX this is the location of the sac2c which must
@@ -201,7 +201,9 @@ Currently the following commands are available:
     def mk_sacprg (self, txt, r):
 
         stmts = "\n\t".join (self.stmts)
-        funs = "\n\n".join (self.funs)
+
+        funs = "\n\n".join (self.funs.values ())
+
         imports = "\n".join (self.imports)
 
         if r == 1: # expr
@@ -284,7 +286,7 @@ int main () {{
                 if r["ret"] == 2: # stmts
                     self.stmts.append (code)
                 elif r["ret"] == 3: # funs
-                    self.funs.append (code)
+                    self.funs[r["symbol"]] = code
                 elif r["ret"] == 4: # use/import/typedef
                     self.imports.append (code)
 
