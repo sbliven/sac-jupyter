@@ -56,6 +56,10 @@ class RealTimeSubprocess(subprocess.Popen):
             queue.put(line)
         stream.close()
 
+    def wait_for_threads(self):
+        self._stdout_thread.join()
+        self._stderr_thread.join()
+
     def write_contents(self):
         """
         Write the available content from stdin and stderr where specified when the instance was created
@@ -80,9 +84,9 @@ class RealTimeSubprocess(subprocess.Popen):
 
 class SacKernel(Kernel):
     implementation = 'jupyter_sac_kernel'
-    implementation_version = '0.1'
+    implementation_version = '0.2'
     language = 'sac'
-    language_version = 'SaC-1.2'
+    language_version = '1.3.3'
     language_info = {'name': 'sac',
                      'mimetype': 'text/plain',
                      'file_extension': '.sac'}
@@ -232,52 +236,57 @@ int main () {{
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
 
-        m = self.check_magics (code)
-        if m is not None:
-            self._write_to_stdout (m)
-            return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
-                    'user_expressions': {}}
+        if not silent:
+            m = self.check_magics (code)
+            if m is not None:
+                self._write_to_stdout (m)
+                return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
+                        'user_expressions': {}}
 
 
-        r = self.check_sacprog_type (code)
-        if r["status"] != "ok": # == -1:
-            self._write_to_stderr(
-                    "[SaC kernel] This is not an expression/statements/function or use/import/typedef\n"
-                    + r["stderr"])
-            return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
-                    'user_expressions': {}}
+            r = self.check_sacprog_type (code)
+            if r["status"] != "ok": # == -1:
+                self._write_to_stderr(
+                        "[SaC kernel] This is not an expression/statements/function or use/import/typedef\n"
+                        + r["stderr"])
+                return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
+                        'user_expressions': {}}
 
 
-        with self.new_temp_file(suffix='.sac') as source_file:
-            source_file.write(self.mk_sacprg (code, r["ret"]))
-            source_file.flush()
-            with self.new_temp_file(suffix='.exe') as binary_file:
-                p = self.compile_with_sac2c(source_file.name, binary_file.name)
-                #, magics['cflags'], magics['ldflags'])
-                while p.poll() is None:
+            with self.new_temp_file(suffix='.sac') as source_file:
+                source_file.write(self.mk_sacprg (code, r["ret"]))
+                source_file.flush()
+                with self.new_temp_file(suffix='.exe') as binary_file:
+                    p = self.compile_with_sac2c(source_file.name, binary_file.name)
+                    #, magics['cflags'], magics['ldflags'])
+                    while p.poll() is None:
+                        p.write_contents()
                     p.write_contents()
+                    if p.returncode != 0:  # Compilation failed
+                        self._write_to_stderr(
+                                "[SaC kernel] sac2c exited with code {}, the executable will not be executed".format(
+                                        p.returncode))
+                        return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
+                                'user_expressions': {}}
+
+            p = self.create_jupyter_subprocess([binary_file.name]) # + magics['args'])
+            while p.poll() is None:
                 p.write_contents()
-                if p.returncode != 0:  # Compilation failed
-                    self._write_to_stderr(
-                            "[SaC kernel] sac2c exited with code {}, the executable will not be executed".format(
-                                    p.returncode))
-                    return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [],
-                            'user_expressions': {}}
 
-        p = self.create_jupyter_subprocess([binary_file.name]) # + magics['args'])
-        while p.poll() is None:
+            p.wait_for_threads()
             p.write_contents()
-        p.write_contents()
 
-        if p.returncode != 0:
-            self._write_to_stderr("[SaC kernel] Executable exited with code {}".format(p.returncode))
-        else:
-            if r["ret"] == 2: # stmts
-                self.stmts.append (code)
-            elif r["ret"] == 3: # funs
-                self.funs.append (code)
-            elif r["ret"] == 4: # use/import/typedef
-                self.imports.append (code)
+            if p.returncode != 0:
+                self._write_to_stderr("[SaC kernel] Executable exited with code {}".format(p.returncode))
+                return {'status': 'error', 'execution_count': self.execution_count, 'payload': [],
+                                'user_expressions': {}}
+            else:
+                if r["ret"] == 2: # stmts
+                    self.stmts.append (code)
+                elif r["ret"] == 3: # funs
+                    self.funs.append (code)
+                elif r["ret"] == 4: # use/import/typedef
+                    self.imports.append (code)
 
         return {'status': 'ok', 'execution_count': self.execution_count, 'payload': [], 'user_expressions': {}}
 
