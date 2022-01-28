@@ -7,14 +7,31 @@ This repository contains jupyter-related tools for SaC.
 Installing the kernel requires the following steps:
 
 1. Install sac with jupyter support.
-2. Copy the content of this repository as follows:
+2. Copy the content of this repository to the default location where
+   jupyter is looking for kernels. On linux systems local jupyter
+   configurations are located in `$HOME/.local/share/jupyter`.
+   On OSX this is at `$HOME/Library/Jupyter` and on windows it is
+   `%APPDATA%\jupyter`. Referring to the path as <jupyter-path>,
+    you should do:
 ```bash
-mkdir -p $HOME/.local/share/jupyter/kernels
-cp -r sac  $HOME/.local/share/jupyter/kernels/
+mkdir -p <jupyter-path>/kernels
+cp -r sac <jupyter-path>/kernels
+cp -r sac_tutorial <jupyter-path>/kernels
 ```
-3. Adjust the path in `~/.local/share/jupyter/kernels/sac/kernel.json` to
+3. Adjust the path in `<jupyter-path>/kernels/sac/kernel.json` and in
+   `<jupyter-path>/kernels/sac_tutorial/kernel.json` to
    point to the location of the `kernel.py` file in this repository.
 4. In `kernel.py` adjust the path to `sac2c` line 105.
+5. Install `nbextensions` for jupyter.
+6. Now install the tutorial:
+```bash
+mkdir -p <jupyter-path>/nbextensions/
+cp -r nbextensions/* <jupyter-path>/nbextensions
+```
+7. Enable the tutorial:
+```bash
+jupyter nbextension enable sac_tutorial/main
+```
 
 At some point we hope to add these files to the sac2c packages so the
 installation process would be significantly simpler.

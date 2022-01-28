@@ -100,15 +100,15 @@ class SacKernel(Kernel):
             #"use StdIO: all;",
             #"use Array: all;"
         ]
-        self.funs = []
+        self.funs = dict()
         self.sac2c_flags =  ['-v0', '-O0', '-noprelude', '-noinl', '-specmode', 'aud']
 
         # XXX this is the location of the sac2c which must
         #     be correct for the system you are running the kernel.
         #     otherwise this module won't be able to find libsac2c.
-        p = '/tmp/sac2c'
-        self.sac2c_bin = p + '/build_r/sac2c_p'
-        self.sac2c_so = p + '/build_r/lib/libsac2c_p.so'
+        p = '/Volumes/Users/sbs/sac2c'
+        self.sac2c_bin = p + '/build_p/sac2c_p'
+        self.sac2c_so = p + '/build_p/lib/libsac2c_p.dylib'
         self.sac2c_so_handle = ctypes.CDLL (self.sac2c_so, mode=(1|ctypes.RTLD_GLOBAL))
         self.sac2c_so_handle.jupyter_init ()
 
@@ -201,7 +201,9 @@ Currently the following commands are available:
     def mk_sacprg (self, txt, r):
 
         stmts = "\n\t".join (self.stmts)
-        funs = "\n\n".join (self.funs)
+
+        funs = "\n\n".join (self.funs.values ())
+
         imports = "\n".join (self.imports)
 
         if r == 1: # expr
@@ -284,7 +286,7 @@ int main () {{
                 if r["ret"] == 2: # stmts
                     self.stmts.append (code)
                 elif r["ret"] == 3: # funs
-                    self.funs.append (code)
+                    self.funs[r["symbol"]] = code
                 elif r["ret"] == 4: # use/import/typedef
                     self.imports.append (code)
 
